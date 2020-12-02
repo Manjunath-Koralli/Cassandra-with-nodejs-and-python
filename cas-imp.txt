@@ -1,0 +1,207 @@
+Get keyspaces info
+
+SELECT * FROM system_schema.keyspaces
+
+Get tables info
+
+SELECT * FROM system_schema.tables WHERE keyspace_name = 'keyspace name';
+SELECT * FROM system_schema.tables WHERE keyspace_name = 'skillsoft';
+
+Get table info
+
+SELECT * FROM system_schema.columns
+WHERE keyspace_name = 'keyspace_name' AND table_name = 'table_name';
+
+
+
+**********************************
+		UDF using javascript
+*************************************
+
+DESCRIBE KEYSPACES;
+DROP KEYSPACE IF EXISTS skillsoft;
+
+CREATE KEYSPACE skillsoft WITH replication = {'class':'NetworkTopologyStrategy','datacenter1':'2','dc2':'2'};
+
+USE skillsoft;
+
+DROP TABLE IF EXISTS scores;
+
+CREATE TABLE IF NOT EXISTS scores (
+	name text,
+	event_date date,
+        mark int,    
+        PRIMARY KEY((name),event_date)    
+);
+
+INSERT INTO skillsoft.scores(name,event_date,mark) VALUES ('Joe','2016-11-01',78);
+INSERT INTO scores(name,event_date,mark) VALUES ('Joe','2016-11-15',75);
+INSERT INTO scores(name,event_date,mark) VALUES ('Joe','2016-12-01',94);
+INSERT INTO scores(name,event_date,mark) VALUES ('Jenna','2016-11-01',78);
+INSERT INTO scores(name,event_date,mark) VALUES ('Jenna','2016-11-15',85);
+INSERT INTO scores(name,event_date,mark) VALUES ('Jenna','2016-12-01',93);
+INSERT INTO scores(name,event_date,mark) VALUES ('Cody','2016-11-01',75);
+INSERT INTO scores(name,event_date,mark) VALUES ('Cody','2016-11-15',85);
+INSERT INTO scores(name,event_date,mark) VALUES ('Cody','2016-12-01',82);
+
+SELECT * FROM skillsoft.scores;
+SELECT name,event_date,mark FROM skillsoft.scores;
+
+UDF -  user defined functions
+
+*********creating a javascript based function to adjust an integer and never exceed 100
+CREATE OR REPLACE FUNCTION skillsoft.adjust(val int)
+	RETURNS NULL ON NULL INPUT
+	RETURNS INT
+	LANGUAGE javascript
+	AS
+	'Math.min(val+10, 100);'
+; 
+
+SELECT name,event_date,mark,adjust(mark) FROM skillsoft.scores;
+
+*********creating a javascript based function to give bonus if an integer exceeds 100
+CREATE OR REPLACE FUNCTION skillsoft.bonus(val int)
+	RETURNS NULL ON NULL INPUT
+	RETURNS INT
+	LANGUAGE javascript
+	AS
+	'Math.max((val+10)-100, 0);'
+; 
+
+SELECT name,event_date,mark,bonus(mark) FROM skillsoft.scores;
+
+SELECT name,event_date,mark,adjust(mark) AS adjustment, bonus(mark) AS bonus FROM skillsoft.scores;
+
+
+**********************************
+		UDF using java
+*************************************
+
+DESCRIBE KEYSPACES;
+DROP KEYSPACE IF EXISTS skillsoft;
+
+CREATE KEYSPACE skillsoft WITH replication = {'class':'NetworkTopologyStrategy','datacenter1':'2','dc2':'2'};
+
+USE skillsoft;
+
+DROP TABLE IF EXISTS scores;
+
+CREATE TABLE IF NOT EXISTS scores (
+	name text,
+	event_date date,
+        marks set<int>,    
+        PRIMARY KEY((name),event_date)    
+);
+
+INSERT INTO scores(name,event_date,marks) VALUES ('Joe','2016-11-01',{78,75,94,92,84});
+INSERT INTO scores(name,event_date,marks) VALUES ('Jenna','2016-11-01',{79,78,94,96,80});
+INSERT INTO scores(name,event_date,marks) VALUES ('Cody','2016-11-01',{72,77,90,82,81});
+
+
+SELECT * FROM skillsoft.scores;
+SELECT name,event_date,marks FROM skillsoft.scores;
+
+
+**************java based function to calculate a min from the set
+
+CREATE OR REPLACE FUNCTION skillsoft.min_set(vals set<int>)
+	RETURNS NULL ON NULL INPUT
+	RETURNS INT
+	LANGUAGE java
+	AS '
+	int min = Integer.MAX_VALUE;
+	for(Object i:vals) { min = Math.min(min, (Integer)i );}
+	return min; '
+;
+
+
+**************java based function to calculate a average from the set
+
+CREATE OR REPLACE FUNCTION skillsoft.avg_set(vals set<int>)
+	RETURNS NULL ON NULL INPUT
+	RETURNS DOUBLE
+	LANGUAGE java
+	AS '
+	int sum = 0;
+	int count = 0;
+	for(Object i:vals) { 
+		sum += (Integer)i;
+		count += 1;
+	}
+	double avg = sum/count;
+	return avg; '
+;
+
+
+**************java based function to calculate a max from the set
+
+CREATE OR REPLACE FUNCTION skillsoft.max_set(vals set<int>)
+	RETURNS NULL ON NULL INPUT
+	RETURNS INT
+	LANGUAGE java
+	AS '
+	int max = Integer.MIN_VALUE;
+	for(Object i:vals) { max = Math.max(max, (Integer)i );}
+	return max; '
+;
+
+Select name,event_date, min_set(marks) AS Minimum, avg_set(marks) AS Average, max_set(marks) AS Maximum FROM scores;
+
+
+/////////////**         WITH JSON              *********************/////////////////
+
+
+INSERT INTO courses JSON ' {
+"course_id":"10003",
+"region_name":"Federation, CA",
+"region_id":"1005",
+"course_name":"Big Data Analytics",
+"assets":["psv","vsae"] }';
+
+
+SELECT JSON course_id,assets,start_date FROM courses WHERE course_id = "" AND "region_name" = "";
+
+*****************         toJson() and from Json() ****************************8
+
+Here creds is of type : 
+creds map<varchar,date>
+
+SELECT instructor_name, toJson(creds) FROM instructors;
+
+
+INSERT INTO instructors(instructor_id, instructor_name,creds) VALUES 
+	('2000','Joe Khoury', 
+		fromJson(' { "Intro to Cassandra" : "2016-10-11","Cassandra for Dev":"2016-10-12"} '));
+
+
+
+
+
+************ NODE JS ************************
+
+CREATE TABLE IF NOT EXISTS instructors(
+	id text,
+	name text,
+	dept text,
+	email text,
+	region text,
+	creds map<varchar,date>,
+	PRIMARY KEY(id)
+) WITH comment = 'A table listing all the instructors';
+
+
+INSERT INTO instructors(id,name,dept,email,region,creds) VALUES 
+	('2000', 'Joe Khoury','DEV','josephkhoury@outlook.com','CA',
+	{'Cassandra' : '2016-11-01',
+	'NoSQL Fundamentals':'2016-12-15'});
+
+INSERT INTO instructors(id,name,dept,email,region,creds) VALUES 
+	('2001', 'Jenna Chavez','DB','unknown','US',
+	{'Cassandra For Dev' : '2016-11-01',
+	'Big Data Analytics':'2016-12-01'});
+
+INSERT INTO instructors(id,name,dept,email,region,creds) VALUES 
+	('2000', 'Joe Khoury','DEV','josephkhoury@outlook.com','CA',
+	{'Cassandra' : '2016-11-01',
+	'NoSQL Fundamentals':'2016-12-15'});
